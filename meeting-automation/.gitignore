@@ -1,0 +1,19 @@
+# 환경변수 (민감정보)
+.env
+.env.local
+
+# 로그 및 임시 파일
+*.log
+logs/
+output/
+
+# 브라우저 세션 (클로바노트 자동 로그인)
+.playwright/
+playwright-state.json
+
+# Node modules (Playwright 설치 시)
+node_modules/
+
+# OS 파일
+.DS_Store
+Thumbs.db
