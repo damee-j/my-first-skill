@@ -1,0 +1,14 @@
+# Slack Bot API
+slack-sdk>=3.23.0
+
+# Anthropic API (스콥 분석)
+anthropic>=0.39.0
+
+# OpenAI API (Coach GPT)
+openai>=1.0.0
+
+# HTTP requests (Lark API)
+requests>=2.31.0
+
+# 환경변수 관리
+python-dotenv>=1.0.0
