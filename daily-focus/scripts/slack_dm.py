@@ -38,9 +38,13 @@ def send_dm(message: str, use_channel: bool = True) -> bool:
         else:
             channel = SLACK_USER_ID
 
+        # Slack 포맷팅: **text** → *text* (볼드)
+        formatted_message = message.replace('**', '*')
+
         response = client.chat_postMessage(
             channel=channel,
-            text=message
+            text=formatted_message,
+            mrkdwn=True  # Markdown 포맷팅 활성화
         )
 
         if response["ok"]:

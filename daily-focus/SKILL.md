@@ -28,9 +28,11 @@ LARK_APP_ID=cli_xxxxxxxxxxxx
 LARK_APP_SECRET=xxxxxxxxxxxx
 LARK_USER_TOKEN=  # OAuth로 자동 발급
 
-# OpenAI (Coach GPT)
+# AI APIs (스콥 분석 및 코칭)
+GEMINI_API_KEY=xxxxxxxxxxxx  # Primary for scope analysis
 OPENAI_API_KEY=sk-proj-xxxxxxxxxxxx
 COACH_GPT_ID=asst_xxxxxxxxxxxx
+ANTHROPIC_API_KEY=sk-ant-xxxxxxxxxxxx  # Optional fallback
 ```
 
 ### 기본 사용법
@@ -62,20 +64,32 @@ COACH_GPT_ID=asst_xxxxxxxxxxxx
    ```
 
 3. **스콥 분석 및 필요시간 계산**
-   - AI가 작업 복잡도 분석
+   - Gemini AI가 작업 복잡도 분석 (OpenAI, Anthropic fallback)
    - 필요 시간 자동 계산 (또는 사용자 지정)
+   - **작업 조언**: 효율적으로 완료하기 위한 구체적인 가이드 제공
 
 4. **Lark 캘린더 빈 시간 찾기**
    - 오늘 일정 조회
    - 미팅 사이 빈 시간 탐색
    - 필요시간만큼 분할 배치
 
-5. **Focus Block 생성**
+5. **Focus Block 생성 및 조언**
    ```
+   🎯 이번 주 Focus
+   "PRD 초안 작성"
+
+   📏 스콥 분석
+   - 작업 복잡도: 높음
+   - 예상 필요 시간: 4.0시간
+   - 분석 근거: Gemini AI 분석
+
+   💡 작업 조언
+   문제 정의부터 시작하세요. 리서치 → 구조화 → 작성 순서로 진행하며,
+   중간중간 이해관계자 피드백을 받으세요.
+
    🔒 Focus Block 생성 완료!
-   - 10:00-11:00 (1시간) "PRD 초안 작성 - Part 1"
-   - 17:00-19:00 (2시간) "PRD 초안 작성 - Part 2"
-   - 총 3시간 확보
+   - 02/06(목) 10:00-12:00 (2시간)
+   - 02/07(금) 14:00-16:00 (2시간)
 
    이 시간엔 다른 미팅이 끼어들 수 없어요! 집중해봐요 💪
    ```

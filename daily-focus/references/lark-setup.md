@@ -189,6 +189,39 @@ python3 scripts/lark_oauth.py  # 토큰 재발급
 - [OAuth 2.0 인증 가이드](https://open.larksuite.com/document/server-docs/authentication-management/access-token/user-access-token)
 - [PKCE 보안 플로우](https://open.larksuite.com/document/server-docs/authentication-management/login-state-management/web-app-authentication-access)
 
+## 토큰 안정성 관리
+
+### 토큰 유효기간 문제
+
+Lark User Access Token의 경우:
+- **유효기간: 2시간** ⏰
+- 만료되면 수동으로 재로그인 필요
+- daily-focus 스킬이 자동 실행 중 토큰이 만료되면 실패
+
+### 해결: Refresh Token 활용 (자동 구현됨)
+
+daily-focus는 이미 Refresh Token 자동 갱신을 지원합니다:
+
+**작동 방식**:
+- OAuth 로그인 시 refresh token 자동 저장
+- 토큰 만료 시 자동으로 갱신 (30일간 유효)
+- 30일마다 한 번만 재로그인 필요
+
+**토큰 상태 확인**:
+```bash
+python3 scripts/lark_token_manager.py
+
+# 출력 예시:
+# ✅ 유효한 Access Token: eyJhbGciOiJFUzI1NiIs...
+# 📅 토큰 만료 정보:
+#   - Access Token 만료: 2026-02-06 18:58:42
+#   - Refresh Token 만료: 2026-03-08 16:58:42
+```
+
+**30일 후 재로그인 알림**:
+- 스크립트가 자동으로 Slack DM으로 알림
+- `python3 scripts/lark_oauth.py` 재실행
+
 ## 다음 단계
 
 Lark 설정이 완료되었다면:

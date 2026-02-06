@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Coach GPT 피드백 스크립트
+Coach GPT 피드백 스크립트 (Google Gemini 사용 - 무료!)
 
 사용법:
     python3 coach_gpt.py --reflection "오늘 PRD 75% 완료했어요"
@@ -10,68 +10,73 @@ Coach GPT 피드백 스크립트
 import os
 import sys
 import argparse
-from openai import OpenAI
+import requests
 from dotenv import load_dotenv
 
 # 환경변수 로드
 load_dotenv()
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-COACH_GPT_ID = os.getenv("COACH_GPT_ID")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-if not OPENAI_API_KEY or not COACH_GPT_ID:
+if not GEMINI_API_KEY:
     print("❌ 환경변수가 설정되지 않았습니다.")
-    print("OPENAI_API_KEY와 COACH_GPT_ID를 .env 파일에 설정해주세요.")
+    print("GEMINI_API_KEY를 .env 파일에 설정해주세요.")
     sys.exit(1)
 
-client = OpenAI(api_key=OPENAI_API_KEY)
+# Coach 시스템 프롬프트
+COACH_SYSTEM_PROMPT = """당신은 전문적이면서도 친근한 생산성 코치입니다.
+
+당신의 역할:
+- 사용자의 하루 업무 회고를 듣고 객관적으로 분석
+- 목표 달성/미달성의 근본 원인을 깊이 있게 탐구
+- 실행 가능한 구체적 조언 제공
+- 격려와 동기부여
+
+응답 스타일:
+- 친근하지만 프로페셔널하게
+- 구체적이고 실행 가능한 조언
+- 2-3단락, 300-500자 정도
+- 존댓말 사용
+- 이모지는 최소한으로만 사용"""
 
 
 def get_coach_feedback(reflection: str) -> str:
-    """Coach GPT로부터 피드백 받기"""
+    """Coach 피드백 받기 (Google Gemini 2.5 Flash Lite - 무료!)"""
     try:
-        # Thread 생성
-        thread = client.beta.threads.create()
+        # Gemini REST API 직접 호출 (가장 안정적)
+        url = f"https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash-lite:generateContent?key={GEMINI_API_KEY}"
 
-        # 메시지 추가
-        client.beta.threads.messages.create(
-            thread_id=thread.id,
-            role="user",
-            content=reflection
-        )
+        headers = {
+            "Content-Type": "application/json"
+        }
 
-        # Run 실행
-        run = client.beta.threads.runs.create(
-            thread_id=thread.id,
-            assistant_id=COACH_GPT_ID
-        )
+        payload = {
+            "contents": [{
+                "parts": [{
+                    "text": f"{COACH_SYSTEM_PROMPT}\n\n사용자 회고:\n{reflection}"
+                }]
+            }],
+            "generationConfig": {
+                "temperature": 0.7,
+                "maxOutputTokens": 800,
+            }
+        }
 
-        # 완료 대기
-        while run.status in ["queued", "in_progress"]:
-            run = client.beta.threads.runs.retrieve(
-                thread_id=thread.id,
-                run_id=run.id
-            )
+        response = requests.post(url, headers=headers, json=payload)
+        data = response.json()
 
-        if run.status == "completed":
-            # 응답 조회
-            messages = client.beta.threads.messages.list(
-                thread_id=thread.id
-            )
-
-            # 최신 메시지 (Coach의 응답)
-            for message in messages.data:
-                if message.role == "assistant":
-                    content = message.content[0].text.value
-                    return content
-
-            return "❌ Coach 응답을 찾을 수 없습니다."
-
+        if response.status_code == 200:
+            feedback = data['candidates'][0]['content']['parts'][0]['text']
+            return feedback
         else:
-            return f"❌ Coach 실행 실패: {run.status}"
+            error = data.get('error', {})
+            return f"❌ Gemini API 오류: {error.get('message', str(data))}"
 
     except Exception as e:
-        return f"❌ OpenAI API 오류: {str(e)}"
+        error_msg = str(e)
+        if "quota" in error_msg.lower() or "rate_limit" in error_msg.lower():
+            return "❌ Gemini API 할당량이 초과되었습니다. (무료 한도: 분당 15회)"
+        return f"❌ Gemini API 오류: {error_msg}"
 
 
 def format_reflection(focus: str = None, result: str = None, reason: str = None) -> str:
