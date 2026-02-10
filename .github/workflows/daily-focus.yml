@@ -1,0 +1,129 @@
+name: Daily Focus Automation
+
+on:
+  schedule:
+    # 매일 아침 10:00 KST (01:00 UTC)
+    - cron: '0 1 * * *'
+    # 매일 저녁 19:00 KST (10:00 UTC)
+    - cron: '0 10 * * *'
+
+  # 수동 실행 가능하도록 설정
+  workflow_dispatch:
+    inputs:
+      flow_type:
+        description: 'Flow to run (morning/evening)'
+        required: true
+        default: 'morning'
+        type: choice
+        options:
+          - morning
+          - evening
+
+jobs:
+  morning-flow:
+    # 아침 10시 스케줄 또는 수동 실행 시 morning 선택
+    if: |
+      (github.event_name == 'schedule' && github.event.schedule == '0 1 * * *') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.flow_type == 'morning')
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          cd daily-focus
+          pip install -r requirements.txt
+
+      - name: Run morning flow
+        env:
+          # Slack credentials
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_USER_ID: ${{ secrets.SLACK_USER_ID }}
+          SLACK_CHANNEL_NAME: ${{ secrets.SLACK_CHANNEL_NAME }}
+          SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
+
+          # Lark credentials
+          LARK_APP_ID: ${{ secrets.LARK_APP_ID }}
+          LARK_APP_SECRET: ${{ secrets.LARK_APP_SECRET }}
+          LARK_USER_TOKEN: ${{ secrets.LARK_USER_TOKEN }}
+
+          # AI API keys
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          COACH_GPT_ID: ${{ secrets.COACH_GPT_ID }}
+        run: |
+          cd daily-focus
+          python3 morning_flow.py
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: morning-logs-${{ github.run_number }}
+          path: |
+            ~/.daily-focus/*.json
+          retention-days: 30
+
+  evening-flow:
+    # 저녁 19시 스케줄 또는 수동 실행 시 evening 선택
+    if: |
+      (github.event_name == 'schedule' && github.event.schedule == '0 10 * * *') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.flow_type == 'evening')
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          cd daily-focus
+          pip install -r requirements.txt
+
+      - name: Run evening flow
+        env:
+          # Slack credentials
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_USER_ID: ${{ secrets.SLACK_USER_ID }}
+          SLACK_CHANNEL_NAME: ${{ secrets.SLACK_CHANNEL_NAME }}
+          SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
+
+          # Lark credentials
+          LARK_APP_ID: ${{ secrets.LARK_APP_ID }}
+          LARK_APP_SECRET: ${{ secrets.LARK_APP_SECRET }}
+          LARK_USER_TOKEN: ${{ secrets.LARK_USER_TOKEN }}
+
+          # AI API keys
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          COACH_GPT_ID: ${{ secrets.COACH_GPT_ID }}
+        run: |
+          cd daily-focus
+          python3 evening_flow.py
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evening-logs-${{ github.run_number }}
+          path: |
+            ~/.daily-focus/*.json
+          retention-days: 30
