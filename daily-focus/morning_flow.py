@@ -136,17 +136,18 @@ def format_focus_summary(task, scope_result, free_slots, created_blocks, needed_
 
 
 def check_lark_token():
-    """Lark 토큰 유효성 체크 (테스트용 - 간소화)"""
-    # 테스트를 위해 .env의 LARK_USER_TOKEN만 확인
-    import os
-    token = os.getenv("LARK_USER_TOKEN")
+    """Lark 토큰 유효성 체크 (토큰 매니저로 자동 갱신)"""
+    try:
+        from lark_token_manager import get_valid_token
 
-    if token:
-        print("✅ LARK_USER_TOKEN 존재 확인 (테스트 모드)")
-        return True
-    else:
-        print("❌ LARK_USER_TOKEN이 없습니다")
-        send_dm("""⚠️ **Lark 캘린더 연동 필요**
+        token = get_valid_token()
+
+        if token:
+            print("✅ Lark 토큰 유효 (자동 갱신 완료)")
+            return True
+        else:
+            print("❌ 유효한 Lark 토큰이 없습니다")
+            send_dm("""⚠️ **Lark 캘린더 연동 필요**
 
 daily-focus 스킬을 사용하려면 Lark 로그인이 필요해요.
 
@@ -156,6 +157,14 @@ python3 ~/dev/my-first-skill/daily-focus/scripts/lark_oauth.py
 ```
 
 로그인 후 다시 시도해주세요!""")
+            return False
+    except Exception as e:
+        print(f"⚠️ 토큰 체크 중 오류: {e}")
+        # fallback: 환경변수 직접 확인
+        token = os.getenv("LARK_USER_TOKEN")
+        if token:
+            print("⚠️ 토큰 매니저 오류, 환경변수 토큰으로 진행")
+            return True
         return False
 
 

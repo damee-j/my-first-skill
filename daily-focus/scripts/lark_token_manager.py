@@ -43,7 +43,7 @@ def save_tokens(access_token, refresh_token, expires_in, refresh_expires_in):
         'access_token': access_token,
         'refresh_token': refresh_token,
         'expires_at': (datetime.now() + timedelta(seconds=expires_in - 300)).isoformat(),  # 5분 여유
-        'refresh_expires_at': (datetime.now() + timedelta(seconds=refresh_expires_in - 86400)).isoformat(),  # 1일 여유
+        'refresh_expires_at': (datetime.now() + timedelta(seconds=refresh_expires_in - 3600)).isoformat(),  # 1시간 여유
         'updated_at': datetime.now().isoformat()
     }
 
@@ -102,7 +102,7 @@ def refresh_access_token(refresh_token):
             'access_token': data.get('access_token'),
             'refresh_token': data.get('refresh_token'),
             'expires_in': data.get('expires_in', 7200),  # 기본 2시간
-            'refresh_expires_in': data.get('refresh_expires_in', 2592000)  # 기본 30일
+            'refresh_expires_in': data.get('refresh_expires_in', 604800)  # 기본 7일
         }
     else:
         raise Exception(f"토큰 갱신 실패: {result.get('msg')}")

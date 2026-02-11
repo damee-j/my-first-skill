@@ -100,7 +100,7 @@ def get_authorization_url():
         'state': oauth_state['state'],
         'code_challenge': oauth_state['code_challenge'],
         'code_challenge_method': 'S256',
-        'scope': 'calendar:calendar'  # 캘린더 읽기/쓰기 권한
+        'scope': 'calendar:calendar offline_access'  # 캘린더 권한 + refresh token 발급
     }
 
     base_url = "https://open.larksuite.com/open-apis/authen/v1/authorize"
@@ -283,7 +283,7 @@ def main():
 
     # 7. 캘린더 목록 조회
     print("\n📅 캘린더 목록 조회 중...")
-    calendars = get_user_calendars(access_token)
+    calendars = get_user_calendars(token_data['access_token'])
 
     if calendars.get('code') == 0:
         calendar_list = calendars.get('data', {}).get('calendar_list', [])
@@ -300,7 +300,7 @@ def main():
             print(f"ID: {calendar_id}")
             print(f"{'=' * 60}")
 
-            events_result = get_calendar_events(access_token, calendar_id)
+            events_result = get_calendar_events(token_data['access_token'], calendar_id)
 
             if events_result.get('code') == 0:
                 events = events_result.get('data', {}).get('items', [])

@@ -18,12 +18,20 @@ from dotenv import load_dotenv
 # 환경변수 로드
 load_dotenv()
 
-# Token Manager 사용 (테스트 모드 - 간소화)
-# 환경변수에서 직접 읽기
-LARK_USER_TOKEN = os.getenv("LARK_USER_TOKEN")
-if not LARK_USER_TOKEN:
-    print("⚠️ LARK_USER_TOKEN이 설정되지 않았습니다.")
-    print("일부 기능이 제한될 수 있습니다.")
+from lark_token_manager import get_valid_token
+
+
+def _get_token():
+    """유효한 Lark 토큰 반환 (자동 갱신 포함)"""
+    token = get_valid_token()
+    if token:
+        return token
+
+    # 토큰 매니저 실패 시 환경변수 fallback
+    token = os.getenv("LARK_USER_TOKEN")
+    if not token:
+        print("❌ 유효한 Lark 토큰이 없습니다. python3 scripts/lark_oauth.py를 실행해주세요.")
+    return token
 
 
 def is_weekday():
@@ -52,9 +60,13 @@ def get_remaining_weekdays():
 
 def get_primary_calendar_id():
     """Primary 캘린더 ID 조회 (type='primary'만 사용, Google 캘린더 제외)"""
+    token = _get_token()
+    if not token:
+        return None
+
     url = "https://open.larksuite.com/open-apis/calendar/v4/calendars"
     headers = {
-        "Authorization": f"Bearer {LARK_USER_TOKEN}",
+        "Authorization": f"Bearer {token}",
         "Content-Type": "application/json"
     }
 
@@ -95,9 +107,13 @@ def list_remaining_weekday_events():
     range_start = int(start_date.timestamp())
     range_end = int(end_date.replace(hour=23, minute=59, second=59).timestamp())
 
+    token = _get_token()
+    if not token:
+        return []
+
     url = f"https://open.larksuite.com/open-apis/calendar/v4/calendars/{calendar_id}/events"
     headers = {
-        "Authorization": f"Bearer {LARK_USER_TOKEN}",
+        "Authorization": f"Bearer {token}",
         "Content-Type": "application/json"
     }
     params = {
@@ -201,13 +217,17 @@ def create_focus_block(title: str, start_time: str, duration_minutes: int):
     if not calendar_id:
         return False
 
+    token = _get_token()
+    if not token:
+        return False
+
     # 시작/종료 시간 계산
     start_dt = datetime.fromisoformat(start_time)
     end_dt = start_dt + timedelta(minutes=duration_minutes)
 
     url = f"https://open.larksuite.com/open-apis/calendar/v4/calendars/{calendar_id}/events"
     headers = {
-        "Authorization": f"Bearer {LARK_USER_TOKEN}",
+        "Authorization": f"Bearer {token}",
         "Content-Type": "application/json"
     }
     payload = {
@@ -240,9 +260,13 @@ def delete_event(event_id: str):
     if not calendar_id:
         return False
 
+    token = _get_token()
+    if not token:
+        return False
+
     url = f"https://open.larksuite.com/open-apis/calendar/v4/calendars/{calendar_id}/events/{event_id}"
     headers = {
-        "Authorization": f"Bearer {LARK_USER_TOKEN}",
+        "Authorization": f"Bearer {token}",
         "Content-Type": "application/json"
     }
 
