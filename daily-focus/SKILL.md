@@ -1,125 +1,90 @@
 ---
 name: daily-focus
 description: >
-  Slack 봇이 매일 10시/19시에 DM으로 오늘 집중할 한 가지 일을 정하고,
-  Lark 캘린더에 Focus Block을 자동 생성. 저녁에는 Coach GPT와 함께 회고.
+  Lark 봇이 매일 밤 10시에 DM으로 오늘 회고 + 내일 집중할 한 가지 일을 정하고,
+  Lark 캘린더에 Focus Block을 자동 생성.
 
   트리거: "/daily-focus", "/daily-review", 또는 "오늘 집중할 일", "회고",
   "Focus Block", "캘린더 시간 확보" 같은 요청.
 
-  외부 연동: Slack (Bot API), Lark (Calendar OAuth), OpenAI (Coach GPT)
+  외부 연동: Lark (IM + Calendar + WebSocket Event), Gemini/OpenAI/Anthropic (AI)
 ---
 
 # daily-focus
 
-매일 아침/저녁 자동으로 말을 걸어 오늘 집중할 딱 한 가지 일을 정하고, Lark 캘린더에 Focus Block을 만들어 미팅으로부터 보호하는 집중력 도우미.
+매일 밤 10시, Lark 봇이 오늘의 회고를 돕고 내일 집중할 딱 한 가지 일을 정해서 Lark 캘린더에 Focus Block을 만들어주는 집중력 도우미.
 
 ## Quick Start
 
 ### 필수 환경변수
 
 ```bash
-# Slack (개인 워크스페이스)
-SLACK_BOT_TOKEN=xoxb-xxxxxxxxxxxx
-SLACK_USER_ID=U01XXXXXXXXX
-
-# Lark (캘린더)
+# Lark (IM + 캘린더)
 LARK_APP_ID=cli_xxxxxxxxxxxx
 LARK_APP_SECRET=xxxxxxxxxxxx
 LARK_USER_TOKEN=  # OAuth로 자동 발급
+LARK_USER_OPEN_ID=ou_xxxxxxxxxxxx
 
 # AI APIs (스콥 분석 및 코칭)
-GEMINI_API_KEY=xxxxxxxxxxxx  # Primary for scope analysis
-OPENAI_API_KEY=sk-proj-xxxxxxxxxxxx
-COACH_GPT_ID=asst_xxxxxxxxxxxx
-ANTHROPIC_API_KEY=sk-ant-xxxxxxxxxxxx  # Optional fallback
+GEMINI_API_KEY=xxxxxxxxxxxx  # Primary
+OPENAI_API_KEY=sk-proj-xxxxxxxxxxxx  # Fallback
+ANTHROPIC_API_KEY=sk-ant-xxxxxxxxxxxx  # Fallback
 ```
 
 ### 기본 사용법
 
-**아침 플로우 (10:00)**:
+**나이틀리 플로우 (22:00)**:
 ```bash
-/daily-focus
+python3 nightly_flow.py
 ```
-→ Slack DM으로 봇이 말을 걺 → 오늘 집중할 한 가지 입력 → 스콥 분석 → Lark 캘린더 빈 시간에 Focus Block 생성
-
-**저녁 플로우 (19:00)**:
-```bash
-/daily-review
-```
-→ Slack DM으로 회고 요청 → 오늘 결과 공유 → Coach GPT 피드백 → Slack으로 전달
+→ Lark DM으로 회고 질문 → 사용자 응답 → Coach 피드백 → 내일 Focus 질문 → 스콥 분석 → Focus Block 생성
 
 ## 워크플로우
 
-### 아침 워크플로우 (10:00)
+### 나이틀리 워크플로우 (22:00)
 
-1. **Slack DM 발송** (자동)
+#### Part A: 오늘의 회고
+
+1. **Lark DM 발송** (자동)
    ```
-   🌅 좋은 아침이에요! 오늘 딱 한 가지, 가장 집중하고 싶은 일은 뭐예요?
+   🌙 하루 고생하셨어요! 오늘의 회고 시간이에요.
+
+   아래 4가지에 대해 자유롭게 답해주세요:
+   1. 오늘 관찰한 가장 중요한 일
+   2. 오늘 배운 일
+   3. 오늘 실행한 일
+   4. 그냥 떠오른 중요한 생각
    ```
 
-2. **사용자 답변**
+2. **사용자 회고 답변**
+
+3. **Coach GPT 피드백** → Lark DM 전달
+
+#### Part B: 내일의 Focus
+
+4. **Lark DM으로 내일 Focus 질문**
    ```
-   신규 기능 PRD 초안 작성
+   내일(02/12 수요일) 딱 한 가지, 가장 집중하고 싶은 일은 뭐예요?
    ```
 
-3. **스콥 분석 및 필요시간 계산**
-   - Gemini AI가 작업 복잡도 분석 (OpenAI, Anthropic fallback)
-   - 필요 시간 자동 계산 (또는 사용자 지정)
-   - **작업 조언**: 효율적으로 완료하기 위한 구체적인 가이드 제공
+5. **사용자 답변** → 스콥 분석 → 필요시간 계산
 
-4. **Lark 캘린더 빈 시간 찾기**
-   - 오늘 일정 조회
-   - 미팅 사이 빈 시간 탐색
-   - 필요시간만큼 분할 배치
+6. **내일 캘린더 빈 시간 찾기**
+   - 내일 일정 조회
+   - 9:30-11:00 기존 Focus 윈도우 내 일정은 무시 (중복 OK)
+   - 빈 시간에 Focus Block 분할 배치
 
-5. **Focus Block 생성 및 조언**
+7. **Focus Block 생성 및 요약**
    ```
-   🎯 이번 주 Focus
+   🎯 내일의 Focus
    "PRD 초안 작성"
 
    📏 스콥 분석
-   - 작업 복잡도: 높음
    - 예상 필요 시간: 4.0시간
-   - 분석 근거: Gemini AI 분석
-
-   💡 작업 조언
-   문제 정의부터 시작하세요. 리서치 → 구조화 → 작성 순서로 진행하며,
-   중간중간 이해관계자 피드백을 받으세요.
 
    🔒 Focus Block 생성 완료!
-   - 02/06(목) 10:00-12:00 (2시간)
-   - 02/07(금) 14:00-16:00 (2시간)
-
-   이 시간엔 다른 미팅이 끼어들 수 없어요! 집중해봐요 💪
-   ```
-
-### 저녁 워크플로우 (19:00)
-
-1. **Slack DM 발송** (자동)
-   ```
-   🌙 하루 고생하셨어요! 오늘 집중했던 'PRD 초안 작성', 어떻게 됐나요?
-   ```
-
-2. **사용자 회고**
-   ```
-   Part 1은 완료했고, Part 2는 50%만 했어. 피곤해서...
-   ```
-
-3. **Coach GPT 피드백**
-   - 진행 상황 분석
-   - 질문 중심 코칭
-   - 다음 액션 제안
-
-4. **Slack으로 피드백 전달**
-   ```
-   🧑‍🏫 Coach 피드백
-   75% 달성은 훌륭해요! 다만 Part 2에서 속도가 느려진 이유를 살펴볼 필요가 있어요.
-
-   질문 1: 17시 이후 집중력이 떨어진 게 단순히 피로 때문일까요,
-           아니면 작업의 난이도가 예상보다 높았나요?
-
-   제안: 내일은 가장 어려운 부분을 오전 Focus Block에 배치하는 건 어떨까요?
+   - 02/12(수) 10:00-11:00 (1시간)
+   - 02/12(수) 14:00-17:00 (3시간)
    ```
 
 ## 스크립트 사용법
@@ -129,13 +94,19 @@ ANTHROPIC_API_KEY=sk-ant-xxxxxxxxxxxx  # Optional fallback
 ```bash
 python3 scripts/lark_oauth.py
 ```
-브라우저가 열리고 로그인하면 `LARK_USER_TOKEN`이 자동으로 저장됩니다.
 
-### Slack DM 테스트
+### Lark IM 메시지 테스트
 
 ```bash
-python3 scripts/slack_dm.py "테스트 메시지"
+python3 scripts/lark_im.py "테스트 메시지"
 ```
+
+### WebSocket 이벤트 수신 테스트
+
+```bash
+python3 scripts/lark_event_listener.py
+```
+→ Lark에서 봇에게 메시지를 보내면 터미널에 표시됨. Ctrl+C로 종료.
 
 ### 캘린더 조회
 
@@ -148,7 +119,7 @@ python3 scripts/lark_calendar.py --list-events
 ```bash
 python3 scripts/lark_calendar.py --create-block \
   --title "PRD 초안 작성" \
-  --start "2026-02-06T10:00:00" \
+  --start "2026-02-12T10:00:00" \
   --duration 180
 ```
 
@@ -160,30 +131,21 @@ python3 scripts/coach_gpt.py --reflection "오늘 PRD 75% 완료했어요"
 
 ## 설정 가이드
 
-### Slack 설정
-
-[references/slack-setup.md](references/slack-setup.md) 참조:
-- Slack Bot 생성
-- Bot Token Scopes 설정 (chat:write, im:write, users:read)
-- User ID 확인 방법
-
-**예상 시간**: 20분
-
 ### Lark 설정
 
 [references/lark-setup.md](references/lark-setup.md) 참조:
 - Lark 앱 생성
-- Calendar API 권한 설정
+- Calendar API + IM 권한 설정
 - OAuth 인증
+- User Open ID 확인
 
 **예상 시간**: 30분
 
-### OpenAI Coach GPT 설정
+### AI API 설정
 
 [references/openai-setup.md](references/openai-setup.md) 참조:
-- API Key 발급
-- Assistant 생성
-- Coach 프롬프트 설정
+- Gemini API Key 발급 (Primary)
+- OpenAI/Anthropic API Key (Fallback)
 
 **예상 시간**: 10분
 
@@ -191,60 +153,39 @@ python3 scripts/coach_gpt.py --reflection "오늘 PRD 75% 완료했어요"
 
 ### cron job으로 자동 실행
 
-매일 아침 10시와 저녁 7시에 자동으로 워크플로우를 실행하려면:
+매일 밤 10시에 자동으로 워크플로우를 실행하려면:
 
 ```bash
-# crontab 편집
 crontab -e
 
-# 아래 내용 추가 (맥/리눅스)
-0 10 * * * cd /Users/damee/dev/my-first-skill/daily-focus && /usr/bin/python3 morning_flow.py >> ~/daily-focus.log 2>&1
-0 19 * * * cd /Users/damee/dev/my-first-skill/daily-focus && /usr/bin/python3 evening_flow.py >> ~/daily-focus.log 2>&1
+# 아래 내용 추가
+0 22 * * * cd /Users/damee/dev/my-first-skill/daily-focus && /usr/bin/python3 nightly_flow.py >> ~/daily-focus.log 2>&1
 ```
 
-> 💡 **Tip**:
-> - Python 경로 확인: `which python3`
-> - 로그는 `~/daily-focus.log`에 저장됩니다
-> - 맥북이 꺼져있으면 실행되지 않으니 주의하세요
-> - 경로를 본인의 실제 경로로 수정하세요
+### GitHub Actions
+
+`.github/workflows/daily-focus.yml` 참조. 매일 22:00 KST (13:00 UTC) 자동 실행.
 
 ## 예외 처리
 
-### Lark 캘린더 빈 시간 부족
-
-```
-오늘 캘린더에 빈 시간이 1시간밖에 없어요. 3시간 필요한데,
-일정을 조정하거나 작업 범위를 줄일까요?
-```
+### 캘린더 빈 시간 부족
 → 사용자에게 조정 옵션 제시
 
 ### 사용자 무응답
-
-1시간 후 재시도 (최대 1회)
+회고 무응답 → Focus 질문으로 진행. Focus 무응답 → 로그 저장 후 종료.
 
 ### API 토큰 만료
-
-```
-Lark 캘린더에 접근할 수 없어요. 토큰을 다시 발급받아주세요.
-python3 scripts/lark_oauth.py
-```
-
-## 프라이버시
-
-- **Slack**: 개인 워크스페이스 사용으로 회사 관리자가 회고 내용을 볼 수 없음
-- **Lark**: 캘린더만 사용 (메시징 사용 안 함)
-- **로그**: 로컬에만 저장
+Lark DM으로 재로그인 안내 자동 발송.
 
 ## 범위
 
 **하는 것**:
-- 아침 10시 Slack DM으로 능동적으로 말 걸기
-- 딱 한 가지 집중할 일 대화 수집
-- AI 스콥 분석 및 필요시간 계산
-- Lark 캘린더 빈 시간 자동 탐색
-- Focus Block 생성 (미팅 보호)
-- 저녁 7시 회고 요청
+- 밤 10시 Lark DM으로 회고 질문 (관찰/배움/실행/떠오른 생각)
 - Coach GPT 전문 피드백
+- 내일 집중할 한 가지 일 수집
+- AI 스콥 분석 및 필요시간 계산
+- 내일 캘린더 빈 시간 자동 탐색 (9:30-11:00 Focus 윈도우 중복 허용)
+- Focus Block 생성 (미팅 보호)
 
 **안 하는 것**:
 - 자동 우선순위 제안 (사용자가 직접 정의)
@@ -253,4 +194,4 @@ python3 scripts/lark_oauth.py
 
 ## 완료 기준
 
-"하루 동안 Slack 봇이 아침 10시/저녁 7시 2번 DM으로 말 걸어서, 오늘 집중할 한 가지 일이 정해지고 필요한 시간만큼 Lark 캘린더 빈 시간에 Focus Block이 생성되며, 저녁에 Coach GPT의 전문적인 피드백과 함께 회고가 Slack DM으로 전달되는 것"
+"매일 밤 10시에 Lark 봇이 DM으로 회고 질문을 보내고, Coach 피드백을 전달한 뒤, 내일 집중할 한 가지 일이 정해지고 필요한 시간만큼 Lark 캘린더 빈 시간에 Focus Block이 생성되는 것"

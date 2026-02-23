@@ -1,4 +1,4 @@
-# Lark Calendar API 연동 가이드
+# Lark 연동 가이드 (Calendar + IM)
 
 > 📚 **참고 문서**: [Lark Open Platform 공식 문서](https://open.larksuite.com/document)
 >
@@ -9,7 +9,7 @@
 
 - **소요 시간**: 약 30분
 - **필요한 것**: Lark 계정
-- **주의사항**: daily-focus는 Lark를 **캘린더 전용**으로 사용합니다 (메시징은 Slack 사용)
+- **용도**: daily-focus는 Lark를 **캘린더 + IM 메시징** 모두 사용합니다
 
 ## 1. 사전 준비
 
@@ -43,8 +43,22 @@
      - `calendar:calendar` - 캘린더 읽기/쓰기
      - `calendar:calendar.event` - 이벤트 생성/수정/삭제
 
-3. **OAuth 권한 타입 선택**
+3. **IM 권한 추가** (메시징용)
+   - 다음 권한을 검색하여 추가:
+     - `im:message` - 메시지 읽기
+     - `im:message:send_as_bot` - 봇으로 메시지 발송
+     - `im:message.group_msg` - 그룹 채팅 메시지 읽기 (폴링 수신용)
+     - `im:chat` - 채팅 목록 조회
+
+4. **Bot 기능 활성화** (양방향 대화 필수)
+   - 왼쪽 메뉴에서 "Features" → "Bot" 클릭
+   - Bot 활성화 (이름, 설명 설정)
+   - 봇이 활성화되어야 그룹 채팅에서 메시지 발송 가능
+
+5. **OAuth 권한 타입 선택**
    - **User Access Token** 방식 사용 (개인 캘린더 접근을 위해 필수)
+   - IM 발송은 **Tenant Access Token** (봇 레벨)으로 자동 처리
+   - IM 수신은 **그룹 채팅 메시지 폴링** (`GET /im/v1/messages`)으로 처리
 
 ## 4. OAuth Redirect URL 설정
 
@@ -219,12 +233,61 @@ python3 scripts/lark_token_manager.py
 ```
 
 **30일 후 재로그인 알림**:
-- 스크립트가 자동으로 Slack DM으로 알림
+- 스크립트가 자동으로 Lark DM으로 알림
 - `python3 scripts/lark_oauth.py` 재실행
+
+## 8. User Open ID 확인
+
+Lark IM으로 메시지를 발송하려면 대상 사용자의 Open ID가 필요합니다.
+
+### 방법 1: OAuth 로그인 후 API 호출
+
+```bash
+# 로그인 후 User Access Token으로 조회
+curl -H "Authorization: Bearer YOUR_USER_TOKEN" \
+  "https://open.larksuite.com/open-apis/authen/v1/user_info"
+```
+
+응답의 `open_id` 필드 값 (예: `ou_xxxxx`)을 `.env`의 `LARK_USER_OPEN_ID`에 설정.
+
+### 방법 2: Lark Admin Console
+
+관리자 권한이 있다면 Admin Console에서 사용자 프로필의 Open ID 확인 가능.
+
+## 9. 그룹 채팅 설정 (봇 양방향 대화)
+
+Lark 봇의 1:1 채팅은 사용자 입력이 제한될 수 있습니다.
+봇과 양방향 대화를 하려면 **그룹 채팅**을 사용합니다.
+
+### 그룹 생성 및 봇 초대
+
+1. **Lark에서 그룹 생성**
+   - Lark 앱 → 채팅 → "+" → 새 그룹 생성
+   - 그룹 이름: `Daily Focus` (또는 원하는 이름)
+   - 본인만 멤버로 추가
+
+2. **봇 초대**
+   - 그룹 설정(⚙️) → "봇" → "봇 추가"
+   - `Daily Focus Calendar` 봇 검색 및 추가
+
+3. **Chat ID 조회 및 저장**
+   ```bash
+   python3 scripts/lark_chat_discovery.py
+   ```
+   - 봇이 참여한 그룹 목록이 표시됨
+   - 선택한 그룹의 `chat_id`가 `.env`에 자동 저장
+
+### 테스트
+
+```bash
+python3 scripts/lark_im.py "테스트 메시지"
+```
+
+그룹 채팅에서 봇 메시지가 표시되면 성공!
+그룹에서 메시지를 입력하면 봇이 폴링으로 수신합니다.
 
 ## 다음 단계
 
 Lark 설정이 완료되었다면:
-- [Slack 설정](slack-setup.md)
 - [OpenAI 설정](openai-setup.md)
 - 모든 설정이 완료되면 [SKILL.md](../SKILL.md)로 돌아가기

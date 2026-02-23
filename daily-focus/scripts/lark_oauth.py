@@ -143,6 +143,46 @@ def exchange_code_for_token(code):
     else:
         raise Exception(f"토큰 교환 실패: {result}")
 
+def get_user_info(user_token):
+    """로그인한 사용자 정보 조회 (open_id 등)"""
+    url = "https://open.larksuite.com/open-apis/authen/v1/user_info"
+    headers = {
+        "Authorization": f"Bearer {user_token}",
+        "Content-Type": "application/json; charset=utf-8"
+    }
+
+    response = requests.get(url, headers=headers)
+    return response.json()
+
+
+def save_open_id_to_env(open_id):
+    """LARK_USER_OPEN_ID를 .env 파일에 저장"""
+    env_file = os.path.join(os.path.dirname(__file__), '..', '.env')
+
+    if not os.path.exists(env_file):
+        with open(env_file, 'w', encoding='utf-8') as f:
+            f.write(f"LARK_USER_OPEN_ID={open_id}\n")
+        return
+
+    with open(env_file, 'r', encoding='utf-8') as f:
+        lines = f.readlines()
+
+    open_id_line = f"LARK_USER_OPEN_ID={open_id}\n"
+    updated = False
+
+    for i, line in enumerate(lines):
+        if line.startswith('LARK_USER_OPEN_ID='):
+            lines[i] = open_id_line
+            updated = True
+            break
+
+    if not updated:
+        lines.append(open_id_line)
+
+    with open(env_file, 'w', encoding='utf-8') as f:
+        f.writelines(lines)
+
+
 def get_user_calendars(user_token):
     """사용자의 캘린더 목록 조회"""
     url = "https://open.larksuite.com/open-apis/calendar/v4/calendars"
@@ -255,6 +295,22 @@ def main():
             token_data['refresh_expires_in']
         )
         print(f"\n💾 토큰을 .env 파일과 캐시에 저장했습니다 (자동 갱신 지원)")
+
+        # 사용자 정보 조회 → open_id 자동 저장
+        print("\n👤 사용자 정보 조회 중...")
+        user_info = get_user_info(token_data['access_token'])
+        if user_info.get('code') == 0:
+            data = user_info.get('data', {})
+            open_id = data.get('open_id')
+            name = data.get('name', '알 수 없음')
+            if open_id:
+                save_open_id_to_env(open_id)
+                print(f"✅ 사용자: {name}")
+                print(f"✅ LARK_USER_OPEN_ID={open_id} → .env 저장 완료")
+            else:
+                print("⚠️ open_id를 가져오지 못했습니다")
+        else:
+            print(f"⚠️ 사용자 정보 조회 실패: {user_info.get('msg', user_info)}")
     else:
         print(f"⚠️  Refresh token을 받지 못했습니다. Access token만 저장합니다.")
         print(f"⚠️  토큰이 만료되면 다시 로그인해야 합니다.")

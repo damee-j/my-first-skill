@@ -1,7 +1,21 @@
 {
   "permissions": {
     "allow": [
-      "Bash(pip install:*)"
+      "Bash(pip install:*)",
+      "Bash(python3:*)",
+      "Bash(chmod:*)",
+      "Bash(pip3 install:*)",
+      "mcp__context7__query-docs",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nEnhance daily-focus skill with Gemini AI and streamline structure\n\n- Add Gemini API integration for scope analysis with task advice\n  - Primary: Gemini 2.0 Flash for time estimation + actionable advice\n  - Fallback: OpenAI → Anthropic → heuristics\n  - New advice field provides specific guidance for efficient task completion\n- Remove unnecessary documentation files per skill-creator guidelines\n  - Delete README.md, design docs, and interview notes\n  - Keep only essential files for AI agent usage\n- Consolidate references structure\n  - Merge lark-token-stability.md into lark-setup.md\n  - Improve token management documentation\n- Update SKILL.md to reflect new Gemini integration and advice feature\n- Repackage skill with validation\n\nCo-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git push:*)",
+      "mcp__context7__resolve-library-id"
     ]
-  }
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "context7",
+    "notebooklm",
+    "lark"
+  ]
 }

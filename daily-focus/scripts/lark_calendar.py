@@ -211,6 +211,133 @@ def find_free_slots(duration_minutes: int, min_block_minutes: int = 30):
     return all_free_slots
 
 
+def get_next_workday(from_date=None):
+    """다음 근무일 계산 (금→월, 토→월, 일→월)"""
+    if from_date is None:
+        from_date = datetime.now()
+    target = from_date + timedelta(days=1)
+    target = target.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    # 주말이면 다음 월요일로
+    while target.weekday() >= 5:
+        target += timedelta(days=1)
+
+    return target
+
+
+def list_events_for_date(target_date):
+    """특정 날짜의 일정 조회 (instance_view로 반복 일정의 실제 발생 시각 반환)"""
+    calendar_id = get_primary_calendar_id()
+    if not calendar_id:
+        return []
+
+    range_start = int(target_date.replace(hour=0, minute=0, second=0, microsecond=0).timestamp())
+    range_end = int(target_date.replace(hour=23, minute=59, second=59, microsecond=0).timestamp())
+
+    token = _get_token()
+    if not token:
+        return []
+
+    url = f"https://open.larksuite.com/open-apis/calendar/v4/calendars/{calendar_id}/events/instance_view"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+    params = {
+        "start_time": str(range_start),
+        "end_time": str(range_end)
+    }
+
+    response = requests.get(url, headers=headers, params=params)
+    data = response.json()
+
+    if data.get("code") != 0:
+        print(f"❌ 일정 조회 실패: {data.get('msg')}")
+        return []
+
+    events = data.get("data", {}).get("items", [])
+    weekday_names = ['월', '화', '수', '목', '금', '토', '일']
+    day_name = weekday_names[target_date.weekday()]
+    print(f"📅 {target_date.strftime('%m/%d')}({day_name}) 일정 조회: {len(events)}개")
+
+    return events
+
+
+def find_free_slots_for_date(target_date, duration_minutes: int, min_block_minutes: int = 30):
+    """특정 날짜의 빈 시간 찾기 (10:00-19:00, 점심 제외, 9:30-11:00 Focus 윈도우 내 일정 무시)
+
+    Args:
+        target_date: 대상 날짜 (datetime)
+        duration_minutes: 필요한 총 시간 (참고용)
+        min_block_minutes: 최소 블록 크기 (기본 30분)
+
+    Returns:
+        list: (start_dt, end_dt, gap_minutes) 튜플의 리스트
+    """
+    events = list_events_for_date(target_date)
+
+    # 근무시간 정의
+    work_start = target_date.replace(hour=10, minute=0, second=0, microsecond=0)
+    work_end = target_date.replace(hour=19, minute=0, second=0, microsecond=0)
+
+    # 9:30-11:00 Focus 전용 윈도우 (이 안의 일정은 무시)
+    focus_window_start = target_date.replace(hour=9, minute=30, second=0, microsecond=0)
+    focus_window_end = target_date.replace(hour=11, minute=0, second=0, microsecond=0)
+
+    # 바쁜 시간 수집
+    busy_slots = []
+
+    # 점심시간 (11:00-12:00)
+    lunch_start = target_date.replace(hour=11, minute=0, second=0, microsecond=0)
+    lunch_end = target_date.replace(hour=12, minute=0, second=0, microsecond=0)
+    busy_slots.append((lunch_start, lunch_end))
+
+    for event in events:
+        start = event.get("start_time", {})
+        end = event.get("end_time", {})
+
+        if "timestamp" in start and "timestamp" in end:
+            start_dt = datetime.fromtimestamp(int(start["timestamp"]))
+            end_dt = datetime.fromtimestamp(int(end["timestamp"]))
+
+            if start_dt.date() == target_date.date():
+                # 9:30-11:00 윈도우 안에 완전히 포함된 일정은 무시
+                if start_dt >= focus_window_start and end_dt <= focus_window_end:
+                    continue
+
+                # 종일 블록 무시 (8시간 이상: 재택, WFH 등 배경 일정)
+                duration_hrs = (end_dt - start_dt).total_seconds() / 3600
+                if duration_hrs >= 8:
+                    continue
+
+                # free_busy_status가 "free"인 일정 무시
+                if event.get("free_busy_status") == "free":
+                    continue
+
+                busy_slots.append((start_dt, end_dt))
+
+    busy_slots.sort()
+
+    # 빈 시간 찾기
+    free_slots = []
+    current_time = work_start
+
+    for busy_start, busy_end in busy_slots:
+        if busy_start > current_time:
+            gap_minutes = int((busy_start - current_time).total_seconds() / 60)
+            if gap_minutes >= min_block_minutes:
+                free_slots.append((current_time, busy_start, gap_minutes))
+        current_time = max(current_time, busy_end)
+
+    # 마지막 빈 시간
+    if current_time < work_end:
+        gap_minutes = int((work_end - current_time).total_seconds() / 60)
+        if gap_minutes >= min_block_minutes:
+            free_slots.append((current_time, work_end, gap_minutes))
+
+    return free_slots
+
+
 def create_focus_block(title: str, start_time: str, duration_minutes: int):
     """Focus Block 생성"""
     calendar_id = get_primary_calendar_id()
