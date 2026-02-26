@@ -294,6 +294,24 @@ def main():
             token_data['expires_in'],
             token_data['refresh_expires_in']
         )
+
+        # .env에 LARK_REFRESH_TOKEN도 저장 (GitHub Actions 환경변수용)
+        env_file = os.path.join(os.path.dirname(__file__), '..', '.env')
+        if os.path.exists(env_file):
+            with open(env_file, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+            refresh_line = f"LARK_REFRESH_TOKEN={token_data['refresh_token']}\n"
+            updated = False
+            for i, line in enumerate(lines):
+                if line.startswith('LARK_REFRESH_TOKEN='):
+                    lines[i] = refresh_line
+                    updated = True
+                    break
+            if not updated:
+                lines.append(refresh_line)
+            with open(env_file, 'w', encoding='utf-8') as f:
+                f.writelines(lines)
+
         print(f"\n💾 토큰을 .env 파일과 캐시에 저장했습니다 (자동 갱신 지원)")
 
         # 사용자 정보 조회 → open_id 자동 저장

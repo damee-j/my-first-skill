@@ -113,6 +113,23 @@ def get_valid_token():
     token_data = load_tokens()
 
     if not token_data:
+        # GitHub Actions 등 캐시 파일이 없는 환경: 환경변수로 폴백
+        refresh_token_env = os.getenv('LARK_REFRESH_TOKEN')
+        if refresh_token_env:
+            print("🔄 환경변수 LARK_REFRESH_TOKEN으로 토큰 갱신 중...")
+            try:
+                new_tokens = refresh_access_token(refresh_token_env)
+                save_tokens(
+                    new_tokens['access_token'],
+                    new_tokens['refresh_token'],
+                    new_tokens['expires_in'],
+                    new_tokens['refresh_expires_in']
+                )
+                print("✅ 토큰 갱신 완료")
+                return new_tokens['access_token']
+            except Exception as e:
+                print(f"❌ LARK_REFRESH_TOKEN 갱신 실패: {e}")
+
         print("❌ 저장된 토큰이 없습니다.")
         print("python3 scripts/lark_oauth.py를 실행하여 로그인해주세요.")
         return None

@@ -10,6 +10,9 @@ requests>=2.31.0
 # 환경변수 관리
 python-dotenv>=1.0.0
 
+# Gemini API (스콥 분석 primary + coach 피드백)
+google-genai>=0.8.0
+
 # Google Calendar API (gcal_sync)
 google-api-python-client>=2.100.0
 google-auth>=2.23.0
