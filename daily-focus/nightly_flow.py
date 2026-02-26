@@ -83,7 +83,7 @@ def run_reflection():
     print("✅ 회고 질문 발송 완료")
 
     # 사용자 응답 대기 (그룹 채팅 폴링)
-    user_response = wait_for_message(timeout_minutes=5)
+    user_response = wait_for_message(timeout_minutes=15)
 
     if not user_response:
         send_message("응답이 없어서 회고를 건너뛸게요. 내일 Focus 질문으로 넘어갑니다!")
@@ -143,7 +143,7 @@ def run_tomorrow_focus(target_date):
     print("✅ Focus 질문 발송 완료")
 
     # 사용자 응답 대기 (그룹 채팅 폴링)
-    user_response = wait_for_message(timeout_minutes=5)
+    user_response = wait_for_message(timeout_minutes=15)
 
     if not user_response:
         send_message("응답이 없어서 Focus Block 생성을 건너뛸게요. 편히 쉬세요!")
