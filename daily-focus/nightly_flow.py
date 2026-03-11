@@ -3,7 +3,7 @@
 나이틀리 워크플로우 (22:00 KST 실행)
 
 통합 플로우:
-- Part A: 오늘의 회고 (4가지 질문 + Coach GPT 피드백)
+- Part A: 오늘의 회고 (4가지 질문 → 기록 저장)
 - Part B: 내일의 Focus Block 생성
 """
 
@@ -25,8 +25,6 @@ from lark_calendar import (
     find_free_slots_for_date, create_focus_block,
     list_events_for_date, get_next_workday
 )
-from coach_gpt import get_coach_feedback
-
 # .env 파일 로드
 from dotenv import load_dotenv
 load_dotenv(Path(__file__).parent / ".env")
@@ -89,35 +87,11 @@ def run_reflection():
         send_message("응답이 없어서 회고를 건너뛸게요. 내일 Focus 질문으로 넘어갑니다!")
         return None
 
-    # Coach GPT 피드백 요청
-    print("\n🧑‍🏫 Coach GPT 피드백 요청 중...")
-    reflection_prompt = f"""사용자의 하루 회고:
-{user_response}
-
----
-
-위 회고 내용을 바탕으로:
-1. 관찰, 배움, 실행, 떠오른 생각을 종합 분석해주세요
-2. 특히 잘한 점을 인정하고 격려해주세요
-3. 내일 더 나은 하루를 위한 실행 가능한 조언 1-2개를 제안해주세요
-
-친근하지만 전문적인 코치 스타일로 답변해주세요."""
-
-    coach_feedback = get_coach_feedback(reflection_prompt)
-    print("✅ 피드백 받기 완료")
-
-    # 피드백 전달
-    feedback_message = f"""🧑‍🏫 Coach 피드백
-
-{coach_feedback}
-
-💾 오늘 하루도 고생 많으셨어요!"""
-
-    send_message(feedback_message)
+    # 회고 기록 확인
+    send_message("💾 회고 기록 완료! 오늘 하루도 고생 많으셨어요.")
 
     return {
         "user_response": user_response,
-        "coach_feedback": coach_feedback,
         "timestamp": datetime.now().isoformat()
     }
 
@@ -297,7 +271,7 @@ def format_focus_summary(task, scope_result, created_blocks, needed_hours, remai
 def main():
     """메인 함수"""
     print("=" * 60)
-    print("🌙 나이틀리 워크플로우 시작 (22:00)")
+    print("🌙 나이틀리 워크플로우 시작 (21:00)")
     print("=" * 60)
 
     # 0. 내일 근무일 계산

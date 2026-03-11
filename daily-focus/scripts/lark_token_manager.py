@@ -30,7 +30,11 @@ def load_tokens():
 
     try:
         with open(TOKEN_CACHE_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
+            data = json.load(f)
+        # access_token이 없으면 손상된 캐시로 간주
+        if not data.get('access_token') and not data.get('refresh_token'):
+            return None
+        return data
     except:
         return None
 
@@ -50,14 +54,14 @@ def save_tokens(access_token, refresh_token, expires_in, refresh_expires_in):
     with open(TOKEN_CACHE_FILE, 'w', encoding='utf-8') as f:
         json.dump(token_data, f, indent=2)
 
-    # .env 파일도 업데이트
-    update_env_file(access_token)
+    # .env 파일도 업데이트 (access + refresh 모두)
+    update_env_file(access_token, refresh_token)
 
     return token_data
 
 
-def update_env_file(access_token):
-    """env 파일의 LARK_USER_TOKEN 업데이트"""
+def update_env_file(access_token, refresh_token=None):
+    """env 파일의 LARK_USER_TOKEN과 LARK_REFRESH_TOKEN 업데이트"""
     env_file = Path(__file__).parent.parent / '.env'
 
     if not env_file.exists():
@@ -66,17 +70,20 @@ def update_env_file(access_token):
     with open(env_file, 'r', encoding='utf-8') as f:
         lines = f.readlines()
 
-    token_line = f"LARK_USER_TOKEN={access_token}\n"
-    updated = False
+    updates = {'LARK_USER_TOKEN': access_token}
+    if refresh_token:
+        updates['LARK_REFRESH_TOKEN'] = refresh_token
 
-    for i, line in enumerate(lines):
-        if line.startswith('LARK_USER_TOKEN='):
-            lines[i] = token_line
-            updated = True
-            break
-
-    if not updated:
-        lines.append(token_line)
+    for key, value in updates.items():
+        new_line = f"{key}={value}\n"
+        updated = False
+        for i, line in enumerate(lines):
+            if line.startswith(f'{key}='):
+                lines[i] = new_line
+                updated = True
+                break
+        if not updated:
+            lines.append(new_line)
 
     with open(env_file, 'w', encoding='utf-8') as f:
         f.writelines(lines)
@@ -98,12 +105,21 @@ def refresh_access_token(refresh_token):
 
     if result.get('code') == 0:
         data = result.get('data', {})
-        return {
-            'access_token': data.get('access_token'),
-            'refresh_token': data.get('refresh_token'),
-            'expires_in': data.get('expires_in', 7200),  # 기본 2시간
-            'refresh_expires_in': data.get('refresh_expires_in', 604800)  # 기본 7일
-        }
+        if data and data.get('access_token'):
+            return {
+                'access_token': data.get('access_token'),
+                'refresh_token': data.get('refresh_token'),
+                'expires_in': data.get('expires_in', 7200),
+                'refresh_expires_in': data.get('refresh_expires_in', 2592000)
+            }
+        else:
+            # data wrapper 없이 바로 반환하는 경우
+            return {
+                'access_token': result.get('access_token'),
+                'refresh_token': result.get('refresh_token'),
+                'expires_in': result.get('expires_in', 7200),
+                'refresh_expires_in': result.get('refresh_expires_in', 2592000)
+            }
     else:
         raise Exception(f"토큰 갱신 실패: {result.get('msg')}")
 

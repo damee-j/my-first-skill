@@ -2,8 +2,8 @@ name: Daily Focus Automation
 
 on:
   schedule:
-    # 매일 22:00 KST (13:00 UTC)
-    - cron: '0 13 * * *'
+    # 매일 21:00 KST (12:00 UTC)
+    - cron: '0 12 * * *'
 
   # 수동 실행 가능하도록 설정
   workflow_dispatch:
