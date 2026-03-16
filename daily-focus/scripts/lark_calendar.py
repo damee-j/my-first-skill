@@ -20,6 +20,63 @@ load_dotenv()
 
 from lark_token_manager import get_valid_token
 
+# API 요청 기본 타임아웃 (초)
+REQUEST_TIMEOUT = 15
+# 재시도 설정
+MAX_RETRIES = 3
+RETRY_BACKOFF = [1, 2, 4]  # 초 단위 대기
+
+
+def _api_request(method, url, headers, retries=MAX_RETRIES, **kwargs):
+    """API 요청 + 재시도 + 타임아웃 래퍼
+
+    Returns:
+        dict: 응답 JSON (실패 시 {"code": -1, "msg": "..."})
+    """
+    import time
+    kwargs.setdefault("timeout", REQUEST_TIMEOUT)
+    last_err = None
+
+    for attempt in range(retries):
+        try:
+            if method == "GET":
+                resp = requests.get(url, headers=headers, **kwargs)
+            elif method == "POST":
+                resp = requests.post(url, headers=headers, **kwargs)
+            elif method == "DELETE":
+                resp = requests.delete(url, headers=headers, **kwargs)
+            else:
+                raise ValueError(f"지원하지 않는 HTTP 메서드: {method}")
+
+            data = resp.json()
+
+            # Lark API 에러 중 재시도 가능한 것들 (서버 에러, rate limit)
+            code = data.get("code", 0)
+            if code != 0 and attempt < retries - 1:
+                # 99991400=rate limit, 서버 에러 코드들
+                if code in (99991400, 99991500, 99991502, 99991503):
+                    wait = RETRY_BACKOFF[min(attempt, len(RETRY_BACKOFF) - 1)]
+                    print(f"⚠️ API 에러 (code={code}), {wait}초 후 재시도 ({attempt+1}/{retries})...")
+                    time.sleep(wait)
+                    continue
+
+            return data
+
+        except (requests.ConnectionError, requests.Timeout, requests.ReadTimeout) as e:
+            last_err = e
+            if attempt < retries - 1:
+                wait = RETRY_BACKOFF[min(attempt, len(RETRY_BACKOFF) - 1)]
+                print(f"⚠️ 네트워크 오류, {wait}초 후 재시도 ({attempt+1}/{retries}): {e}")
+                time.sleep(wait)
+            else:
+                print(f"❌ API 요청 실패 ({retries}회 재시도 후): {e}")
+
+        except Exception as e:
+            print(f"❌ 예상치 못한 API 오류: {e}")
+            return {"code": -1, "msg": str(e)}
+
+    return {"code": -1, "msg": f"네트워크 오류 ({retries}회 재시도 후): {last_err}"}
+
 
 def _get_token():
     """유효한 Lark 토큰 반환 (자동 갱신 포함)"""
@@ -70,8 +127,7 @@ def get_primary_calendar_id():
         "Content-Type": "application/json"
     }
 
-    response = requests.get(url, headers=headers)
-    data = response.json()
+    data = _api_request("GET", url, headers)
 
     if data.get("code") != 0:
         print(f"❌ 캘린더 조회 실패: {data.get('msg')}")
@@ -95,7 +151,9 @@ def list_today_events():
 
 
 def list_remaining_weekday_events():
-    """이번 주 남은 평일 일정 조회 (오늘 ~ 금요일)"""
+    """이번 주 남은 평일 일정 조회 (오늘 ~ 금요일)
+    instance_view 엔드포인트 사용 (반복 일정의 실제 발생일 타임스탬프 반환)
+    """
     calendar_id = get_primary_calendar_id()
     if not calendar_id:
         return []
@@ -103,37 +161,52 @@ def list_remaining_weekday_events():
     # 이번 주 남은 평일 범위 계산
     start_date, end_date = get_remaining_weekdays()
 
-    # Unix timestamp (seconds)
+    # Unix timestamp (seconds) — 다음날 00:00:00으로 경계 설정 (1초 gap 방지)
     range_start = int(start_date.timestamp())
-    range_end = int(end_date.replace(hour=23, minute=59, second=59).timestamp())
+    next_day = (end_date + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    range_end = int(next_day.timestamp())
 
     token = _get_token()
     if not token:
         return []
 
-    url = f"https://open.larksuite.com/open-apis/calendar/v4/calendars/{calendar_id}/events"
+    # instance_view 엔드포인트 사용 (반복 일정 실제 발생일 반환)
+    url = f"https://open.larksuite.com/open-apis/calendar/v4/calendars/{calendar_id}/events/instance_view"
     headers = {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json"
     }
-    params = {
-        "start_time": range_start,
-        "end_time": range_end
-    }
 
-    response = requests.get(url, headers=headers, params=params)
-    data = response.json()
+    # 페이지네이션으로 전체 일정 조회
+    all_events = []
+    page_token = None
 
-    if data.get("code") != 0:
-        print(f"❌ 일정 조회 실패: {data.get('msg')}")
-        return []
+    while True:
+        params = {
+            "start_time": str(range_start),
+            "end_time": str(range_end),
+        }
+        if page_token:
+            params["page_token"] = page_token
 
-    events = data.get("data", {}).get("items", [])
+        data = _api_request("GET", url, headers, params=params)
+
+        if data.get("code") != 0:
+            print(f"❌ 일정 조회 실패: {data.get('msg')}")
+            return all_events  # 이미 가져온 것이라도 반환
+
+        items = data.get("data", {}).get("items", [])
+        all_events.extend(items)
+
+        # 다음 페이지 확인
+        page_token = data.get("data", {}).get("page_token")
+        if not page_token:
+            break
 
     # 디버그: 조회 범위 출력
-    print(f"📅 일정 조회 범위: {start_date.strftime('%m/%d(%a)')} ~ {end_date.strftime('%m/%d(%a)')}")
+    print(f"📅 일정 조회 범위: {start_date.strftime('%m/%d(%a)')} ~ {end_date.strftime('%m/%d(%a)')} ({len(all_events)}개)")
 
-    return events
+    return all_events
 
 
 def find_free_slots(duration_minutes: int, min_block_minutes: int = 30):
@@ -226,13 +299,17 @@ def get_next_workday(from_date=None):
 
 
 def list_events_for_date(target_date):
-    """특정 날짜의 일정 조회 (instance_view로 반복 일정의 실제 발생 시각 반환)"""
+    """특정 날짜의 일정 조회 (instance_view로 반복 일정의 실제 발생 시각 반환)
+    페이지네이션으로 전체 일정 조회.
+    """
     calendar_id = get_primary_calendar_id()
     if not calendar_id:
         return []
 
     range_start = int(target_date.replace(hour=0, minute=0, second=0, microsecond=0).timestamp())
-    range_end = int(target_date.replace(hour=23, minute=59, second=59, microsecond=0).timestamp())
+    # 다음날 00:00:00으로 경계 설정 (23:59:59의 1초 gap 방지)
+    next_day = (target_date + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    range_end = int(next_day.timestamp())
 
     token = _get_token()
     if not token:
@@ -243,24 +320,37 @@ def list_events_for_date(target_date):
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json"
     }
-    params = {
-        "start_time": str(range_start),
-        "end_time": str(range_end)
-    }
 
-    response = requests.get(url, headers=headers, params=params)
-    data = response.json()
+    # 페이지네이션으로 전체 일정 조회
+    all_events = []
+    page_token = None
 
-    if data.get("code") != 0:
-        print(f"❌ 일정 조회 실패: {data.get('msg')}")
-        return []
+    while True:
+        params = {
+            "start_time": str(range_start),
+            "end_time": str(range_end),
+        }
+        if page_token:
+            params["page_token"] = page_token
 
-    events = data.get("data", {}).get("items", [])
+        data = _api_request("GET", url, headers, params=params)
+
+        if data.get("code") != 0:
+            print(f"❌ 일정 조회 실패: {data.get('msg')}")
+            return all_events
+
+        items = data.get("data", {}).get("items", [])
+        all_events.extend(items)
+
+        page_token = data.get("data", {}).get("page_token")
+        if not page_token:
+            break
+
     weekday_names = ['월', '화', '수', '목', '금', '토', '일']
     day_name = weekday_names[target_date.weekday()]
-    print(f"📅 {target_date.strftime('%m/%d')}({day_name}) 일정 조회: {len(events)}개")
+    print(f"📅 {target_date.strftime('%m/%d')}({day_name}) 일정 조회: {len(all_events)}개")
 
-    return events
+    return all_events
 
 
 def find_free_slots_for_date(target_date, duration_minutes: int, min_block_minutes: int = 30):
@@ -370,11 +460,13 @@ def create_focus_block(title: str, start_time: str, duration_minutes: int):
         "free_busy_status": "busy"
     }
 
-    response = requests.post(url, headers=headers, json=payload)
-    data = response.json()
+    data = _api_request("POST", url, headers, json=payload)
 
     if data.get("code") != 0:
-        print(f"❌ Focus Block 생성 실패: {data.get('msg')}")
+        error_msg = data.get('msg', '알 수 없는 오류')
+        error_code = data.get('code', '?')
+        print(f"❌ Focus Block 생성 실패 (code={error_code}): {error_msg}")
+        print(f"   요청: {title} | {start_dt.strftime('%Y-%m-%d %H:%M')}-{end_dt.strftime('%H:%M')}")
         return False
 
     print(f"✅ Focus Block 생성 성공: {title} ({start_dt.strftime('%H:%M')}-{end_dt.strftime('%H:%M')})")
@@ -397,8 +489,7 @@ def delete_event(event_id: str):
         "Content-Type": "application/json"
     }
 
-    response = requests.delete(url, headers=headers)
-    data = response.json()
+    data = _api_request("DELETE", url, headers)
 
     if data.get("code") != 0:
         print(f"❌ 이벤트 삭제 실패: {data.get('msg')}")

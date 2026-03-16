@@ -31,15 +31,14 @@ load_dotenv(Path(__file__).parent / ".env")
 
 
 def check_lark_token():
-    """Lark 토큰 유효성 체크 (캘린더용)"""
+    """Lark 토큰 유효성 체크 (캘린더용)
+    실제 캘린더 API 호출로 토큰 유효성을 검증한다.
+    """
     try:
         from lark_token_manager import get_valid_token
 
         token = get_valid_token()
-        if token:
-            print("✅ Lark 토큰 유효 (자동 갱신 완료)")
-            return True
-        else:
+        if not token:
             print("❌ 유효한 Lark 토큰이 없습니다")
             send_message("""⚠️ Lark 캘린더 연동 필요
 
@@ -50,12 +49,21 @@ python3 ~/dev/my-first-skill/daily-focus/scripts/lark_oauth.py
 
 로그인 후 다시 시도해주세요!""")
             return False
+
+        # 실제 캘린더 API 호출로 토큰 유효성 검증
+        from lark_calendar import get_primary_calendar_id
+        calendar_id = get_primary_calendar_id()
+        if calendar_id:
+            print(f"✅ Lark 토큰 유효, 캘린더 연결 확인 (calendar_id: {calendar_id[:12]}...)")
+            return True
+        else:
+            print("❌ 토큰은 있지만 캘린더 접근 불가")
+            send_message("⚠️ Lark 캘린더 접근에 실패했어요. 토큰이 만료되었을 수 있습니다.\n터미널에서 python3 scripts/lark_oauth.py를 실행해주세요.")
+            return False
+
     except Exception as e:
         print(f"⚠️ 토큰 체크 중 오류: {e}")
-        token = os.getenv("LARK_USER_TOKEN")
-        if token:
-            print("⚠️ 토큰 매니저 오류, 환경변수 토큰으로 진행")
-            return True
+        send_message(f"⚠️ Lark 토큰 체크 중 오류 발생: {e}\n캘린더 기능 없이 진행합니다.")
         return False
 
 
@@ -193,6 +201,7 @@ def run_tomorrow_focus(target_date):
     # Focus Block 생성
     print("\n🔒 Focus Block 생성 중...")
     created_blocks = []
+    failed_blocks = []
     remaining_minutes = needed_minutes
 
     for free_start, free_end, gap_minutes in free_slots:
@@ -209,6 +218,28 @@ def run_tomorrow_focus(target_date):
                 "duration": block_minutes
             })
             remaining_minutes -= block_minutes
+        else:
+            failed_blocks.append({
+                "start": start_iso,
+                "duration": block_minutes
+            })
+            print(f"⚠️ Focus Block 생성 실패: {free_start.strftime('%H:%M')} ({block_minutes}분)")
+
+    if failed_blocks and not created_blocks:
+        send_message(f"""❌ Focus Block 생성에 실패했어요.
+
+작업: {task_text}
+시도한 블록: {len(failed_blocks)}개
+
+Lark 캘린더 연동 상태를 확인해주세요.
+터미널에서 python3 scripts/lark_oauth.py를 실행하면 됩니다.""")
+        return {
+            "target_date": target_date.strftime("%Y-%m-%d"),
+            "focus_task": task_text,
+            "scope_analysis": scope_result,
+            "focus_blocks": [],
+            "failed_blocks": len(failed_blocks)
+        }
 
     # 요약 메시지 발송
     remaining_hours = remaining_minutes / 60 if remaining_minutes > 0 else 0
