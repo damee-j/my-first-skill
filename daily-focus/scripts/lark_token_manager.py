@@ -194,8 +194,27 @@ def get_valid_token():
         return new_tokens['access_token']
 
     except Exception as e:
-        print(f"❌ 토큰 갱신 실패: {e}")
-        print("python3 scripts/lark_oauth.py를 실행하여 다시 로그인해주세요.")
+        print(f"⚠️ 캐시된 refresh token 갱신 실패: {e}")
+
+        # 캐시된 refresh token이 실패하면 환경변수 refresh token으로 재시도
+        # (수동으로 GitHub Secrets를 업데이트한 경우 환경변수가 더 최신일 수 있음)
+        refresh_token_env = os.getenv('LARK_REFRESH_TOKEN')
+        if refresh_token_env and refresh_token_env != token_data.get('refresh_token'):
+            print("🔄 환경변수 LARK_REFRESH_TOKEN으로 재시도 중...")
+            try:
+                new_tokens = refresh_access_token(refresh_token_env)
+                save_tokens(
+                    new_tokens['access_token'],
+                    new_tokens['refresh_token'],
+                    new_tokens['expires_in'],
+                    new_tokens['refresh_expires_in']
+                )
+                print("✅ 환경변수 refresh token으로 갱신 완료")
+                return new_tokens['access_token']
+            except Exception as e2:
+                print(f"❌ 환경변수 refresh token도 실패: {e2}")
+
+        print("❌ 토큰 갱신 실패. python3 scripts/lark_oauth.py를 실행하여 다시 로그인해주세요.")
         return None
 
 

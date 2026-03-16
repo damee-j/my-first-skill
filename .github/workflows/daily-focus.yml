@@ -27,6 +27,15 @@ jobs:
           cd daily-focus
           pip install -r requirements.txt
 
+      # Lark 토큰 캐시 복원 (이전 실행에서 갱신된 refresh token 포함)
+      # CI는 매 실행마다 파일시스템이 초기화되므로, 갱신된 토큰을 cache로 보존
+      - name: Restore Lark token cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.daily-focus/lark_tokens.json
+          key: lark-tokens-dummy-never-matches
+          restore-keys: lark-tokens-
+
       - name: Run nightly flow
         env:
           # Lark credentials
@@ -44,6 +53,15 @@ jobs:
         run: |
           cd daily-focus
           python3 nightly_flow.py
+
+      # 갱신된 Lark 토큰을 캐시에 저장 (다음 실행에서 복원됨)
+      # run_id로 매번 새 캐시 생성 → restore-keys로 최신 캐시 복원
+      - name: Save Lark token cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.daily-focus/lark_tokens.json
+          key: lark-tokens-${{ github.run_id }}
 
       - name: Upload logs
         if: always()
